@@ -1,0 +1,158 @@
+<?xml version="1.0"?>
+<!--
+  Created by jun on 9/14/14.
+-->
+<s:ViewNavigatorApplication xmlns:fx="http://ns.adobe.com/mxml/2009"
+    xmlns:s="library://ns.adobe.com/flex/spark"
+    title="Hello World!"
+    applicationComplete="_onApplicationComplete( event )">
+    <!-- TODO: Set the applicationDPI to 320 -->
+    <!-- TODO: Implement a Splashscreen Image -->
+
+    <!-- TODO: Use an <fx:Style/> tag to reference /assets/styles/main.css -->
+
+    <fx:Script>
+        <![CDATA[
+        import edu.du.mobile.control.events.VenueDataEvent;
+        import edu.du.mobile.control.events.NavigationEvent;
+        import edu.du.mobile.model.AppModel;
+        import edu.du.mobile.model.constants.ApplicationScreens;
+        import edu.du.mobile.model.vo.User;
+        import edu.du.mobile.model.vo.Venue;
+        import edu.du.mobile.view.LocationDetailsView;
+        import edu.du.mobile.view.LocationFeedListView;
+        import edu.du.mobile.view.LoginOrRegisterView;
+
+        import mx.collections.ArrayCollection;
+
+        import mx.events.FlexEvent;
+        import mx.rpc.Fault;
+        import mx.rpc.events.FaultEvent;
+        import mx.rpc.events.ResultEvent;
+        import mx.utils.ObjectUtil;
+
+        // https://developer.foursquare.com/docs/venues/search
+        public static const FOURSQUARE_LOCATION_SERVICE_BASE_URL:String = "https://api.foursquare.com/v2/venues/search?";
+
+        [Bindable]
+        private var _appModel:AppModel = AppModel.getInstance();
+
+        [Bindable]
+        private var _searchVenueServiceURL:String;
+
+        // Client ID and Secret were from creating an app registration: https://foursquare.com/developers/apps
+        private var _clientID:String = "FJOBDXJYZAIVCCTHHPVU4NIB5S5C5CCAKOGVKX2VCOBAKZUB";
+        private var _clientSecret:String = "4VM52Z3OJSPCM1GZTEIWOEO0DP0BDCEOHV0T2BIMK5LCYDXP";
+
+        // This is the lat/long for RealEyes Media @ 940 Logan St., Denver, CO 80203
+        private var _latitude:String = "39.7311660";
+        private var _longitude:String = "-104.9819070";
+
+
+        private function _updateSearchVenueServiceURL(searchString:String = ""):void {
+            // Example: https://api.foursquare.com/v2/venues/search?ll=39.7311660,-104.9819070&client_id=FJOBDXJYZAIVCCTHHPVU4NIB5S5C5CCAKOGVKX2VCOBAKZUB&client_secret=4VM52Z3OJSPCM1GZTEIWOEO0DP0BDCEOHV0T2BIMK5LCYDXP&v=20140806
+            _searchVenueServiceURL = FOURSQUARE_LOCATION_SERVICE_BASE_URL
+                    + "ll=" + _latitude + "," + _longitude
+                    + "&client_id=" + _clientID
+                    + "&client_secret=" + _clientSecret
+                    + "&v=20140806";
+        }
+
+        private function _onApplicationComplete(event:FlexEvent):void {
+            this.addEventListener(NavigationEvent.GOTO_SCREEN, _onGotoScreen);
+            this.addEventListener(VenueDataEvent.GET_VENUES, _onGetVenues);
+
+            dispatchEvent(new NavigationEvent(NavigationEvent.GOTO_SCREEN, ApplicationScreens.LOGIN));
+
+            if (!_appModel.userCollection.length) {
+                dummyUserService.send();
+            }
+        }
+
+        private function _onGotoScreen(event:NavigationEvent):void {
+            switch (event.screenName) {
+                case ApplicationScreens.LOCATION_FEED_LIST:
+                {
+                    navigator.pushView(LocationFeedListView);
+                    break;
+                }
+                case ApplicationScreens.LOCATION_DETAILS:
+                {
+                    navigator.pushView(LocationDetailsView);
+                    break;
+                }
+                case ApplicationScreens.LOGIN:
+                case ApplicationScreens.REGISTER:
+                {
+                    navigator.pushView(LoginOrRegisterView, event.screenName);
+                    break;
+                }
+                default:
+                {
+                }
+                    ;
+            }
+        }
+
+        private function _onGetVenues(event:VenueDataEvent):void {
+
+            _updateSearchVenueServiceURL();
+
+            searchVenueService.send();
+        }
+
+        private function _onSearchVenueServiceResult(event:ResultEvent):void {
+            trace(ObjectUtil.toString(event.result));
+
+            var venuesCollection:ArrayCollection = _appModel.venuesCollection;
+            var venueDataJSON:Object = JSON.parse(event.result.toString());
+
+            for each(var venueData:Object in venueDataJSON.response.venues) {
+                trace(venueData.name);
+                var venue:Venue = new Venue();
+                venue.name = venueData.name;
+                venue.contactPhone = venueData.contact.formattedPhone;
+                venue.addressLine1 = venueData.location.formattedAddress[0];
+                venue.addressLine2 = venueData.location.formattedAddress[2];
+
+                venuesCollection.addItem(venue);
+            }
+        }
+
+        private function _onDummyUserServiceResult(event:ResultEvent):void {
+            trace("Dummy User Returned");
+
+            var userXML:XML = event.result as XML;
+
+            var user:User = new User();
+                user.email = userXML.email;
+                user.username = userXML.username;
+                user.password = userXML.password;
+                user.gender = userXML.gender;
+
+            _appModel.addUserToCollection( user );
+        }
+
+        private function _onServiceFault(event:FaultEvent):void {
+            trace("Error calling Foursquare Service");
+        }
+        ]]>
+    </fx:Script>
+
+    <fx:Declarations>
+        <s:HTTPService id="searchVenueService"
+            resultFormat="text"
+            url="{ _searchVenueServiceURL }"
+            result="_onSearchVenueServiceResult( event )"
+            fault="_onServiceFault( event )"
+            showBusyCursor="true" />
+
+        <s:HTTPService id="dummyUserService"
+           resultFormat="e4x"
+           url="assets/data/dummyUser.xml"
+           result="_onDummyUserServiceResult( event )"
+           fault="_onServiceFault( event )"
+           showBusyCursor="true" />
+    </fx:Declarations>
+
+</s:ViewNavigatorApplication>
